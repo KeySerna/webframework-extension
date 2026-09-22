@@ -1,0 +1,37 @@
+body {
+    font-family: Arial, sans-serif;
+    max-width: 500px;
+    margin: 40px auto;
+    color: #1b2a38;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.logo {
+    width: 90px;
+}
+
+section {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+input {
+    padding: 6px;
+    margin-right: 6px;
+}
+
+button {
+    padding: 6px 12px;
+    cursor: pointer;
+}
+
+p#result, p#piResult, p#squareResult {
+    font-weight: bold;
+    color: #1AA7D6;
+}
