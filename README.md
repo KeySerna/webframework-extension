@@ -1,3 +1,81 @@
+# Framework extension — concurrency, graceful shutdown & cloud deployment
+
+> This section documents the extension built for the "Containerizing and Deploying a Java Web Application" workshop assignment. It does **not** use Spring — it extends the course's own minimal web framework (documented in full below, under "WebFramework").
+
+## Current state of the framework
+
+Before this extension, `HttpServer` was strictly **sequential**: it accepted one client connection at a time in a single-threaded `while` loop, and `stop()` only flipped a boolean flag without ever unblocking the blocking `accept()` call — so graceful shutdown didn't actually work end to end (the server would hang until the next incoming connection before it noticed it should stop).
+
+## Changes introduced in this extension
+
+- **Concurrent request handling:** each accepted connection is now dispatched to a virtual-thread executor (`Executors.newVirtualThreadPerTaskExecutor()`, Java 21) instead of being handled inline in the accept loop. Multiple clients are served in parallel; the accept loop itself stays single-threaded and just keeps dispatching.
+- **Real graceful shutdown:** `stop()` now closes the `ServerSocket`, which unblocks the blocking `accept()` call with an `IOException` that the loop treats as an expected shutdown signal (rather than an error) when `running == false`. After the accept loop exits, the executor is shut down with `awaitTermination(10s)` so in-flight requests get a chance to finish before the JVM returns control to the caller — with a forced `shutdownNow()` fallback if that timeout is exceeded.
+- **Port from environment variable:** already present in the base framework (`WebFramework.start()` reads `PORT`, default `8080`) — kept as-is, now also passed through to the Docker container via `-e PORT=...`.
+- **Docker container:** new `Dockerfile` (Amazon Corretto 21 base image), building and running the plain `.jar` (no Spring, no external dependencies).
+- **AWS EC2 deployment:** deployed and verified on an Amazon Linux 2023 EC2 instance (AWS Academy Learner Lab), same flow as the main workshop repository (Docker Engine installed via `yum`, image pulled from Docker Hub, container run with `--restart unless-stopped`).
+
+Relevant commit: [`02078b5` — Implement concurrent request handling with virtual threads and fix graceful shutdown](https://github.com/KeySerna/webframework-extension/commit/02078b5)
+
+## Build and run locally
+
+```bash
+mvn clean package
+$env:PORT=8080          # PowerShell; use `export PORT=8080` on Linux/macOS
+$env:APP_ENV="development"
+java -jar target/webframework.jar
+```
+
+Verify:
+```
+http://localhost:8080/hello?name=Pedro
+```
+
+Graceful shutdown (only available when `APP_ENV=development`):
+```
+http://localhost:8080/shutdown
+```
+The server prints `Server stopped gracefully.` and the process exits cleanly.
+
+## Run in Docker
+
+```bash
+docker build -t <dockerhub-user>/webframework-extension:1.0 .
+docker run -d --name webframework-extension \
+  -e PORT=8080 -e APP_ENV=production \
+  -p 8090:8080 <dockerhub-user>/webframework-extension:1.0
+```
+
+Verify: `http://localhost:8090/hello?name=Docker`
+
+`/shutdown` must return **404** here, since `APP_ENV=production` disables that route — confirming the environment-based configuration works the same way inside a container as it does locally.
+
+**Docker Hub repository:** https://hub.docker.com/r/keyserna/webframework-extension
+
+## Cloud deployment evidence
+
+Deployed on an AWS EC2 instance (Amazon Linux 2023, AWS Academy Learner Lab):
+
+```bash
+docker pull keyserna/webframework-extension:1.0
+docker run -d --name webframework-extension --restart unless-stopped \
+  -e PORT=8080 -e APP_ENV=production \
+  -p 8080:8080 keyserna/webframework-extension:1.0
+```
+
+Verified with:
+```
+http://<ec2-public-ip>:8080/hello?name=AWS
+```
+Response: `Hello AWS`
+
+> Note: this is an AWS Academy Learner Lab instance — its public IP changes between lab sessions, so the address above may no longer respond by the time this is reviewed. Re-running the steps in this section on a fresh instance reproduces the same result.
+
+---
+
+# Base framework documentation
+
+Everything below this line documents the framework as it existed before this extension (concurrency + graceful shutdown fix + Docker + EC2), kept for reference.
+
 # WebFramework
 
 Mini framework web en Java (sin dependencias externas) que permite registrar servicios HTTP GET mediante funciones lambda, servir archivos estáticos y desplegarse en la nube con configuración externalizada. Desarrollado como parte del laboratorio *"Building and Deploying a Maintainable Application Server"*.
