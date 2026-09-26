@@ -11,6 +11,9 @@ package co.edu.escuelaing.webframework;
 
 import java.io.*;
 import java.net.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class HttpServer {
     private final Router router;
@@ -18,32 +21,71 @@ public class HttpServer {
     private final int port;
     private volatile boolean running = false;
 
+    private ServerSocket serverSocket;
+    private final ExecutorService clientHandlerPool = Executors.newVirtualThreadPerTaskExecutor();
+
     public HttpServer(Router router, StaticFileService staticFileService, int port) {
         this.router = router;
         this.staticFileService = staticFileService;
         this.port = port;
     }
 
+    /**
+     * Accepts connections in a loop and dispatches each one to the virtual-thread
+     * executor, so multiple clients can be served concurrently instead of one at a
+     * time. The accept loop itself stays single-threaded; only request handling is
+     * parallelized.
+     */
     public void start() throws IOException {
         running = true;
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
+        try (ServerSocket socket = new ServerSocket(port)) {
+            this.serverSocket = socket;
             System.out.println("Servidor escuchando en el puerto " + port);
             while (running) {
                 try {
-                    Socket clientSocket = serverSocket.accept();
-                    handleClient(clientSocket);
+                    Socket clientSocket = socket.accept();
+                    clientHandlerPool.submit(() -> handleClient(clientSocket));
                 } catch (IOException e) {
                     if (running) {
                         System.out.println("Error aceptando conexión: " + e.getMessage());
                     }
+                    // if !running, this IOException is expected: stop() closed the
+                    // socket to unblock accept(), so we just fall through and exit.
                 }
             }
+        } finally {
+            awaitInFlightRequests();
         }
         System.out.println("Server stopped gracefully.");
     }
 
+    /**
+     * Graceful shutdown: stop accepting new connections, unblock the accept() call
+     * (which would otherwise block forever waiting for the next client), and let
+     * requests already in progress finish before returning control to the caller.
+     */
     public void stop() {
         running = false;
+        if (serverSocket != null && !serverSocket.isClosed()) {
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                System.out.println("Error closing server socket during shutdown: " + e.getMessage());
+            }
+        }
+    }
+
+    private void awaitInFlightRequests() {
+        clientHandlerPool.shutdown();
+        try {
+            if (!clientHandlerPool.awaitTermination(10, TimeUnit.SECONDS)) {
+                System.out.println("Timed out waiting for in-flight requests; forcing shutdown.");
+                clientHandlerPool.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            clientHandlerPool.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void handleClient(Socket clientSocket) {
