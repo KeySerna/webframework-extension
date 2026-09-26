@@ -1,6 +1,12 @@
 # Framework extension — concurrency, graceful shutdown & cloud deployment
 
+**Alumna:** Keyla Yunuette Serna Illescas
+
 > This section documents the extension built for the "Containerizing and Deploying a Java Web Application" workshop assignment. It does **not** use Spring — it extends the course's own minimal web framework (documented in full below, under "WebFramework").
+
+## Video de demostración
+
+Despliegue local (Docker) y en AWS EC2 funcionando: **[Ver video en YouTube](PENDIENTE-PEGAR-LINK)**
 
 ## Current state of the framework
 
