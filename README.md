@@ -70,6 +70,44 @@ Response: `Hello AWS`
 
 > Note: this is an AWS Academy Learner Lab instance — its public IP changes between lab sessions, so the address above may no longer respond by the time this is reviewed. Re-running the steps in this section on a fresh instance reproduces the same result.
 
+## Evidencia de la extensión
+
+### Prueba local (raw jar y Docker)
+
+Respuesta del servidor corriendo con `java -jar` en local:
+
+![Hello local](evidencia/local-hello-docker.png)
+
+`/shutdown` devolviendo **404** cuando `APP_ENV=production` (confirma que la ruta de apagado grácil solo existe en desarrollo, tanto en local como dentro del contenedor):
+
+![Shutdown 404 en producción](evidencia/local-shutdown-404-produccion.png)
+
+Imagen construida localmente con Docker Desktop, lista para publicar en Docker Hub:
+
+![Imagen Docker local](evidencia/docker-images-local.png)
+
+### Despliegue en AWS EC2
+
+Instancia EC2 (Amazon Linux 2023) usando el par de claves `webframework-key`:
+
+![Detalle de instancia EC2](evidencia/aws-ec2-instance-webframework-key.png)
+
+Reutilización del `.pem` de `virtualization-lab-key` para la instancia de reemplazo (tras perder acceso a la clave original de `webframework-key`, nunca descargada):
+
+![Reutilización de key pair](evidencia/aws-key-reused-virtualization-lab.png)
+
+Conexión SSH exitosa a la instancia:
+
+![Conexión SSH](evidencia/aws-ssh-connect.png)
+
+`docker pull`, `docker run`, `docker ps` y `docker logs` del contenedor en la instancia EC2:
+
+![Pull, run y logs en EC2](evidencia/aws-docker-pull-run-logs.png)
+
+Respuesta pública `Hello AWS` desde la instancia:
+
+![Hello AWS](evidencia/aws-hello-aws.png)
+
 ---
 
 # Base framework documentation
